@@ -7,13 +7,13 @@
  */
 
 $sourceFolder = $argv[1];
-$destinationFolder = $argv[2]; 
+$destinationFolder = $argv[2];
 
 copyFiles($sourceFolder, $destinationFolder);
 
 // Format the file to standard format
-function FormatFile(){
-  //To be implemented
+function FormatFile() {
+    //To be implemented
 }
 
 // Function to Copy folders and files       
@@ -26,10 +26,10 @@ function copyFiles($src, $dst) {
         foreach ($files as $file)
             if ($file != "." && $file != "..")
                 copyFiles("$src/$file", "$dst/$file");
-    } else if (file_exists($src)){
+    } else if (file_exists($src)) {
         copy($src, $dst);
-        removeDir($src);  
-    }    
+        removeDir($src);
+    }
 }
 
 // Function to remove folders and files 
@@ -44,4 +44,3 @@ function removeDir($dir) {
     else if (file_exists($dir))
         unlink($dir);
 }
-
