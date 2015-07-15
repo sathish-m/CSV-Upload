@@ -17,16 +17,6 @@ $itemDistTableFields = "";
 $tableName = "";
 $currentDistributorId = 0;
 
-$confDistributorList = array_keys($confArray);
-$dbDistributorList = array();
-$dbDistributorList = getDistributorList();
-
-$distributorsToCreate = array_diff($confDistributorList, $dbDistributorList);
-
-if (count($distributorsToCreate) > 0) {
-    $response = createDistributors($distributorsToCreate);
-}
-
 foreach ($confArray as $key => $value) {
     global $distributorConfig, $currentDistributorId, $itemMasterFields, $tableName,
     $itemMasterTableFields, $itemDistTableFields, $checkMrp, $isMappingHeaderAdded, $isMrpHeaderAdded;
@@ -36,8 +26,8 @@ foreach ($confArray as $key => $value) {
     $isMrpHeaderAdded = false;
     $mappingExepFile = NULL;
     $mrpExcepFile = NULL;
-    $sourceFolder = $value['sourceDir'];
-    $exceptionDir = $distributorConfig['exceptionFile'];
+    $sourceFolder = $distributorConfig['exceptionDir'];
+    $exceptionDir = $distributorConfig['exceptionDir'];
     $mrpExceptionDir = $distributorConfig['priceExceptionDir'];
     $checkMrp = $distributorConfig['checkMrp'];
     $itemMasterFields = explode(",", $distributorConfig['itemMasterFields']);
@@ -88,10 +78,11 @@ function csvParsing($src, $file) {
                     continue;
                 }
             }
-            if ($distributorConfig['isForceInsert']) {
+            if (!empty($itemKeyValues['isNew']) && $itemKeyValues['isNew'] == 1) {
                 $result = saveCSVData($itemKeyValues);
-            } else {
-                $updateResult = mappingItemWithDistributor($itemKeyValues);
+            } else if (!empty($itemKeyValues['itemId']) && is_numeric($itemKeyValues['itemId'])) {
+                $itemId = $itemKeyValues['itemId'];
+                $updateResult = mappingItemWithDistributor($itemId, $itemKeyValues);
             }
             if ($result || $updateResult) {
                 $isInserted = true;
@@ -105,6 +96,10 @@ function csvParsing($src, $file) {
         fclose($handle);
         return;
     }
+}
+
+function checkItemIsNewOrExisting($itemKeyValues) {
+    
 }
 
 function saveCSVData($itemKeyValues) {
@@ -211,44 +206,38 @@ function createDistributors($distributorList) {
     closeConnection();
 }
 
-function mappingItemWithDistributor($itemKeyValues) {
-    global $currentDistributorId, $itemDistTableFields;
-    $filterDistData = filterItemDistributorFields($itemKeyValues);
-    $itemDistValues = array_values($filterDistData);
-    $checkItemQuery = "SELECT ItemId FROM itemname_rules where `name` like '" . $itemKeyValues['Name'] . "'";
-    $result = mysql_query($checkItemQuery, getMyConnection());
+function isItemExist($itemId) {
+    $query = "select itemMaster.Id from item_master itemMaster where itemMaster.Id = $itemId";
+    $result = mysql_query($query, getMyConnection());
     if (mysql_num_rows($result) > 0) {
-        $nameRuleResult = mysql_fetch_assoc($result);
-        if ($nameRuleResult['ItemId']) {
-            $existingItemId = $nameRuleResult['ItemId'];
-            $query = "INSERT INTO item_distributor (`ItemId`, `DistributorId`, `" . implode("`, `", $itemDistTableFields) . "`) "
-                    . "VALUES(" . $existingItemId . ", " . $currentDistributorId . ", '" . implode("', '", $itemDistValues) . "')"
-                    . " ON DUPLICATE KEY UPDATE ItemId=" . $existingItemId . ", DistributorId= " . $currentDistributorId . ", Mrp= " . $filterDistData['Mrp'] . ", SellingPrice=" . $filterDistData['Selling Price'] . ", Offer='" . $filterDistData['Offer'] . "'";
-            $res = mysql_query($query, getMyConnection());
-            return $res;
-        }
+        return true;
     } else {
-        createExceptionFile($itemKeyValues);
+        return false;
     }
     closeConnection();
 }
 
-function createExceptionFile($itemKeyValues) {
-    global $exceptionDir, $isMappingHeaderAdded, $itemMasterFields, $itemDistributorFields, $mappingExepFile;
-    if (!$isMappingHeaderAdded) {
-        $mappingExepFile = new SplFileObject($exceptionDir, 'w');
-        $mappingExepFile->fputcsv(array_merge($itemMasterFields, $itemDistributorFields));
-        $isMappingHeaderAdded = true;
-    }
-    $filterItemData = filterItemMasterFields($itemKeyValues);
+function mappingItemWithDistributor($itemId, $itemKeyValues) {
+    global $currentDistributorId, $itemDistTableFields;
     $filterDistData = filterItemDistributorFields($itemKeyValues);
-    $exceptionKeyValues = array_merge($filterItemData, $filterDistData);
-    $mappingExepFile->fputcsv($exceptionKeyValues);
+    $itemDistValues = array_values($filterDistData);
+    $filterItemData = filterItemMasterFields($itemKeyValues);
+
+    $nameRuleQuery = "INSERT INTO itemname_rules (`itemId`, `Name`) VALUES(" . $itemId . ", '" . $filterItemData['Name'] . "')";
+    $nameRuleResult = mysql_query($nameRuleQuery, getMyConnection());
+    if ($nameRuleResult) {
+        $query = "INSERT INTO item_distributor (`ItemId`, `DistributorId`, `" . implode("`, `", $itemDistTableFields) . "`) "
+                . "VALUES(" . $itemId . ", " . $currentDistributorId . ", '" . implode("', '", $itemDistValues) . "')"
+                . " ON DUPLICATE KEY UPDATE ItemId=" . $itemId . ", DistributorId= " . $currentDistributorId . ", Mrp= " . $filterDistData['Mrp'] . ", SellingPrice=" . $filterDistData['Selling Price'] . ", Offer='" . $filterDistData['Offer'] . "'";
+        $res = mysql_query($query, getMyConnection());
+        return $res;
+    }
+    closeConnection();
 }
 
 function createMrpException($itemKeyValues) {
-    global $mrpExceptionDir, $isMrpHeaderAdded, $itemMasterFields, $itemDistributorFields, $mrpExcepFile;
-    if (!$isMrpHeaderAdded) {
+    global $mrpExceptionDir, $isHeaderAdded, $itemMasterFields, $itemDistributorFields, $mrpExcepFile;
+    if (!$isHeaderAdded) {
         $mrpExcepFile = new SplFileObject($mrpExceptionDir, 'w');
         $mrpExcepFile->fputcsv(array_merge($itemMasterFields, $itemDistributorFields));
         $isMrpHeaderAdded = true;
