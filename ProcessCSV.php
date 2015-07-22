@@ -40,8 +40,10 @@ foreach ($confArray as $key => $value) {
     $exceptionDir = $distributorConfig['exceptionFile'];
     $mrpExceptionDir = $distributorConfig['priceExceptionDir'];
     $checkMrp = $distributorConfig['checkMrp'];
-    $itemMasterFields = explode(",", $distributorConfig['itemMasterFields']);
-    $itemDistributorFields = explode(",", $distributorConfig['itemDistFields']);
+    $itemMasterRawFields = explode(",", $distributorConfig['itemMasterFields']);
+    $itemMasterFields = array_map('strtolower', $itemMasterRawFields);
+    $itemDistributorRawFields = explode(",", $distributorConfig['itemDistFields']);
+    $itemDistributorFields = array_map('strtolower', $itemDistributorRawFields);
     $tableName = $distributorConfig['destinationTable'];
     $itemMasterTableFields = explode(",", $distributorConfig['tableFields']);
     $itemDistTableFields = explode(",", $distributorConfig['itemDistTableFields']);
@@ -62,6 +64,7 @@ function processFiles($src) {
 function csvParsing($src, $file) {
     global $distributorConfig, $checkMrp;
     $result = '';
+    $updateResult = '';
     $isInserted = false;
     $processedFolder = $distributorConfig['processedDir'];
     $defaults = array(
@@ -117,7 +120,7 @@ function saveCSVData($itemKeyValues) {
     $res = mysql_query($query, getMyConnection());
     if ($res) {
         $lastInsertItemId = mysql_insert_id();
-        $nameRuleQuery = "INSERT INTO itemname_rules (`itemId`, `Name`) VALUES(" . $lastInsertItemId . ", '" . $filterItemData['Name'] . "')";
+        $nameRuleQuery = "INSERT INTO itemname_rules (`itemId`, `Name`) VALUES(" . $lastInsertItemId . ", '" . $filterItemData['name'] . "')";
         $nameRuleResult = mysql_query($nameRuleQuery, getMyConnection());
         if ($nameRuleResult) {
             $itemDistributorQuery = "INSERT INTO item_distributor (`ItemId`, `DistributorId`, `" . implode("`, `", $itemDistTableFields) . "`) VALUES(" . $lastInsertItemId . ", " . $currentDistributorId . ", '" . implode("', '", $itemDistValues) . "')";
@@ -131,7 +134,7 @@ function saveCSVData($itemKeyValues) {
 function filterItemMasterFields($itemKeyValues) {
     global $itemMasterFields;
     $processedData = array();
-
+    $itemKeyValues = array_change_key_case($itemKeyValues, CASE_LOWER);
     $item_keys = array_keys($itemKeyValues);
     foreach ($itemMasterFields as $value) {
         if (in_array($value, $item_keys)) {
@@ -146,6 +149,7 @@ function filterItemMasterFields($itemKeyValues) {
 function filterItemDistributorFields($itemKeyValues) {
     global $itemDistributorFields;
     $processedData = array();
+    $itemKeyValues = array_change_key_case($itemKeyValues, CASE_LOWER);
     $item_keys = array_keys($itemKeyValues);
 
     foreach ($itemDistributorFields as $value) {
@@ -160,7 +164,7 @@ function filterItemDistributorFields($itemKeyValues) {
 
 function isMrpEmpty($itemKeyValues) {
     $filteredDistValues = filterItemDistributorFields($itemKeyValues);
-    if (empty($filteredDistValues['Mrp'])) {
+    if (empty($filteredDistValues['mrp'])) {
         return true;
     } else {
         return false;
@@ -223,7 +227,7 @@ function mappingItemWithDistributor($itemKeyValues) {
             $existingItemId = $nameRuleResult['ItemId'];
             $query = "INSERT INTO item_distributor (`ItemId`, `DistributorId`, `" . implode("`, `", $itemDistTableFields) . "`) "
                     . "VALUES(" . $existingItemId . ", " . $currentDistributorId . ", '" . implode("', '", $itemDistValues) . "')"
-                    . " ON DUPLICATE KEY UPDATE ItemId=" . $existingItemId . ", DistributorId= " . $currentDistributorId . ", Mrp= " . $filterDistData['Mrp'] . ", SellingPrice=" . $filterDistData['Selling Price'] . ", Offer='" . $filterDistData['Offer'] . "'";
+                    . " ON DUPLICATE KEY UPDATE ItemId=" . $existingItemId . ", DistributorId= " . $currentDistributorId . ", Mrp= " . $filterDistData['mrp'] . ", SellingPrice=" . $filterDistData['selling price'] . ", Offer='" . $filterDistData['offer'] . "'";
             $res = mysql_query($query, getMyConnection());
             return $res;
         }

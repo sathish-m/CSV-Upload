@@ -30,8 +30,11 @@ foreach ($confArray as $key => $value) {
     $exceptionDir = $distributorConfig['exceptionDir'];
     $mrpExceptionDir = $distributorConfig['priceExceptionDir'];
     $checkMrp = $distributorConfig['checkMrp'];
-    $itemMasterFields = explode(",", $distributorConfig['itemMasterFields']);
-    $itemDistributorFields = explode(",", $distributorConfig['itemDistFields']);
+    $itemMasterRawFields = explode(",", $distributorConfig['itemMasterFields']);
+    $itemMasterFields = array_map('strtolower', $itemMasterRawFields);
+    $itemDistributorRawFields = explode(",", $distributorConfig['itemDistFields']);
+    $itemDistributorFields = array_map('strtolower', $itemDistributorRawFields);
+    
     $tableName = $distributorConfig['destinationTable'];
     $itemMasterTableFields = explode(",", $distributorConfig['tableFields']);
     $itemDistTableFields = explode(",", $distributorConfig['itemDistTableFields']);
@@ -98,10 +101,6 @@ function csvParsing($src, $file) {
     }
 }
 
-function checkItemIsNewOrExisting($itemKeyValues) {
-    
-}
-
 function saveCSVData($itemKeyValues) {
     global $currentDistributorId, $tableName, $itemMasterTableFields, $itemDistTableFields;
     $filterItemData = filterItemMasterFields($itemKeyValues);
@@ -112,7 +111,7 @@ function saveCSVData($itemKeyValues) {
     $res = mysql_query($query, getMyConnection());
     if ($res) {
         $lastInsertItemId = mysql_insert_id();
-        $nameRuleQuery = "INSERT INTO itemname_rules (`itemId`, `Name`) VALUES(" . $lastInsertItemId . ", '" . $filterItemData['Name'] . "')";
+        $nameRuleQuery = "INSERT INTO itemname_rules (`itemId`, `Name`) VALUES(" . $lastInsertItemId . ", '" . $filterItemData['name'] . "')";
         $nameRuleResult = mysql_query($nameRuleQuery, getMyConnection());
         if ($nameRuleResult) {
             $itemDistributorQuery = "INSERT INTO item_distributor (`ItemId`, `DistributorId`, `" . implode("`, `", $itemDistTableFields) . "`) VALUES(" . $lastInsertItemId . ", " . $currentDistributorId . ", '" . implode("', '", $itemDistValues) . "')";
@@ -126,7 +125,7 @@ function saveCSVData($itemKeyValues) {
 function filterItemMasterFields($itemKeyValues) {
     global $itemMasterFields;
     $processedData = array();
-
+    $itemKeyValues = array_change_key_case($itemKeyValues, CASE_LOWER);
     $item_keys = array_keys($itemKeyValues);
     foreach ($itemMasterFields as $value) {
         if (in_array($value, $item_keys)) {
@@ -141,6 +140,7 @@ function filterItemMasterFields($itemKeyValues) {
 function filterItemDistributorFields($itemKeyValues) {
     global $itemDistributorFields;
     $processedData = array();
+    $itemKeyValues = array_change_key_case($itemKeyValues, CASE_LOWER);
     $item_keys = array_keys($itemKeyValues);
 
     foreach ($itemDistributorFields as $value) {
@@ -155,7 +155,7 @@ function filterItemDistributorFields($itemKeyValues) {
 
 function isMrpEmpty($itemKeyValues) {
     $filteredDistValues = filterItemDistributorFields($itemKeyValues);
-    if (empty($filteredDistValues['Mrp'])) {
+    if (empty($filteredDistValues['mrp'])) {
         return true;
     } else {
         return false;
@@ -200,12 +200,6 @@ function getDistributorList() {
     return $distributorList;
 }
 
-function createDistributors($distributorList) {
-    $query = "INSERT INTO distributor_master (Id, ParentId) values (" . implode("), (", $distributorList) . ", 471)";
-    $res = mysql_query($query, getMyConnection());
-    closeConnection();
-}
-
 function isItemExist($itemId) {
     $query = "select itemMaster.Id from item_master itemMaster where itemMaster.Id = $itemId";
     $result = mysql_query($query, getMyConnection());
@@ -223,12 +217,12 @@ function mappingItemWithDistributor($itemId, $itemKeyValues) {
     $itemDistValues = array_values($filterDistData);
     $filterItemData = filterItemMasterFields($itemKeyValues);
 
-    $nameRuleQuery = "INSERT INTO itemname_rules (`itemId`, `Name`) VALUES(" . $itemId . ", '" . $filterItemData['Name'] . "')";
+    $nameRuleQuery = "INSERT INTO itemname_rules (`itemId`, `Name`) VALUES(" . $itemId . ", '" . $filterItemData['name'] . "')";
     $nameRuleResult = mysql_query($nameRuleQuery, getMyConnection());
     if ($nameRuleResult) {
         $query = "INSERT INTO item_distributor (`ItemId`, `DistributorId`, `" . implode("`, `", $itemDistTableFields) . "`) "
                 . "VALUES(" . $itemId . ", " . $currentDistributorId . ", '" . implode("', '", $itemDistValues) . "')"
-                . " ON DUPLICATE KEY UPDATE ItemId=" . $itemId . ", DistributorId= " . $currentDistributorId . ", Mrp= " . $filterDistData['Mrp'] . ", SellingPrice=" . $filterDistData['Selling Price'] . ", Offer='" . $filterDistData['Offer'] . "'";
+                . " ON DUPLICATE KEY UPDATE ItemId=" . $itemId . ", DistributorId= " . $currentDistributorId . ", Mrp= " . $filterDistData['mrp'] . ", SellingPrice=" . $filterDistData['selling price'] . ", Offer='" . $filterDistData['offer'] . "'";
         $res = mysql_query($query, getMyConnection());
         return $res;
     }
